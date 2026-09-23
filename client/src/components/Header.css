@@ -1,0 +1,28 @@
+.header-card {
+  margin-bottom: 1.5rem;
+}
+
+.header-university {
+  font-size: 0.75rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #6366f1;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.header-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 0.4rem;
+}
+
+.header-subtitle {
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.header-subtitle strong {
+  color: #e2e8f0;
+}

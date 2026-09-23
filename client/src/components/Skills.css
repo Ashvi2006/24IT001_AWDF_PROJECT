@@ -1,0 +1,25 @@
+.skills-card {
+  margin-bottom: 1.5rem;
+}
+
+.skills-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.skill-item {
+  font-size: 0.9rem;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+}
+
+.skill-icon {
+  font-size: 0.85rem;
+}
