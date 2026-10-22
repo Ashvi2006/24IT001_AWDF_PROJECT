@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "test": "node --test tests/task.test.js",
+    "test:fail-demo": "node -e \"process.env.DEMO_BROKEN_TEST='true'; require('child_process').execSync('node --test tests/task.test.js', { stdio: 'inherit' });\""
   },
   "keywords": [],
   "author": "",
@@ -17,6 +19,7 @@
     "express": "^5.2.1",
     "express-validator": "^7.3.2",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.10.1"
+    "mongoose": "^9.10.1",
+    "node-cache": "^5.1.2"
   }
 }

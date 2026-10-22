@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import AITaskAssistant from './AITaskAssistant';
 import './TaskManager.css';
 
 const API_URL = 'http://localhost:5000/api/tasks';
@@ -16,6 +17,14 @@ function TaskManager() {
   const [editDescription, setEditDescription] = useState('');
   const [editPriority, setEditPriority] = useState('Medium');
 
+  // Navigation tab
+  const [activeTab, setActiveTab] = useState('tasks'); // 'tasks' | 'ai' | 'events' | 'devops'
+
+  // Week 10: Async EventEmitter Notifications state
+  const [notifications, setNotifications] = useState([]);
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
+  const [lastEmittedEvent, setLastEmittedEvent] = useState(null);
+
   const priorityEmojis = { Low: '🟢', Medium: '🟡', High: '🔴' };
 
   // Fetch tasks
@@ -24,7 +33,8 @@ function TaskManager() {
     setError(null);
     try {
       const res = await axios.get(API_URL);
-      setTasks(res.data);
+      const fetchedTasks = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      setTasks(fetchedTasks);
     } catch (err) {
       setError(
         err.response?.data?.message ||
@@ -35,23 +45,94 @@ function TaskManager() {
     }
   };
 
+  // Week 10: Fetch async notifications from server
+  const fetchNotifications = async () => {
+    setLoadingNotifs(true);
+    try {
+      const res = await axios.get(`${API_URL}/notifications`);
+      setNotifications(res.data?.notifications || []);
+    } catch (err) {
+      // Ignore if offline
+    } finally {
+      setLoadingNotifs(false);
+    }
+  };
+
+  // Week 10: Clear notification logs
+  const handleClearNotifications = async () => {
+    try {
+      await axios.delete(`${API_URL}/notifications`);
+      setNotifications([]);
+      setLastEmittedEvent(null);
+    } catch (err) {
+      // Ignore
+    }
+  };
+
   useEffect(() => {
     fetchTasks();
+    fetchNotifications();
   }, []);
 
-  // Add task
+  // Add task (triggers Week 10 task:created background event on server)
   const handleAddTask = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!title.trim()) return;
     setError(null);
     try {
-      const res = await axios.post(API_URL, { title: title.trim(), description: description.trim(), priority });
+      const res = await axios.post(API_URL, {
+        title: title.trim(),
+        description: description.trim(),
+        priority,
+        assignedUser: 'Ashvi Antala'
+      });
       setTasks([res.data, ...tasks]);
       setTitle('');
       setDescription('');
       setPriority('Medium');
+
+      // Save Week 10 metadata for immediate visual confirmation
+      if (res.data?._asyncNotification) {
+        setLastEmittedEvent(res.data._asyncNotification);
+      }
+
+      // Re-fetch notifications after background delay
+      setTimeout(() => {
+        fetchNotifications();
+      }, 700);
     } catch (err) {
       setError(err.response?.data?.message || `Failed to add task: ${err.message}`);
+    }
+  };
+
+  // Week 13: Apply AI generated content to the form
+  const handleApplyFromAI = ({ title: aiTitle, description: aiDesc, priority: aiPriority }) => {
+    setTitle(aiTitle);
+    setDescription(aiDesc);
+    setPriority(aiPriority);
+    setActiveTab('tasks');
+  };
+
+  // Week 13: Directly create a task from AI Copilot
+  const handleAddTaskDirectly = async ({ title: aiTitle, description: aiDesc, priority: aiPriority }) => {
+    setError(null);
+    try {
+      const res = await axios.post(API_URL, {
+        title: aiTitle,
+        description: aiDesc,
+        priority: aiPriority,
+        assignedUser: 'AI Copilot'
+      });
+      setTasks([res.data, ...tasks]);
+      if (res.data?._asyncNotification) {
+        setLastEmittedEvent(res.data._asyncNotification);
+      }
+      setTimeout(() => {
+        fetchNotifications();
+      }, 700);
+      setActiveTab('tasks');
+    } catch (err) {
+      setError(err.response?.data?.message || `Failed to create AI task: ${err.message}`);
     }
   };
 
@@ -109,124 +190,398 @@ function TaskManager() {
     <section className="task-manager card">
       <div className="task-header">
         <div>
-          <h2 className="section-title">⚡ Full-Stack Task Manager (REST + MongoDB Atlas)</h2>
-          <p className="task-subtitle">Practicals 4-7: Isolated Task Actions, Inline Editing, CRUD & Validation</p>
+          <h2 className="section-title">⚡ Full-Stack Task Hub & Engineering Practicals</h2>
+          <p className="task-subtitle">
+            Weeks 10-13: EventEmitter Asynchronous Processing, Docker Containerization, CI/CD Pipeline & Responsible AI Copilot
+          </p>
         </div>
-        <button className="btn btn-refresh" onClick={fetchTasks} disabled={loading}>
-          🔄 Refresh Tasks
+        <div className="task-header-actions">
+          <button className="btn btn-refresh" onClick={fetchTasks} disabled={loading}>
+            🔄 Refresh Tasks
+          </button>
+        </div>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="task-nav-tabs">
+        <button
+          className={`tab-btn ${activeTab === 'tasks' ? 'active' : ''}`}
+          onClick={() => setActiveTab('tasks')}
+        >
+          📋 Tasks & CRUD ({tasks.length})
+        </button>
+        <button
+          className={`tab-btn ai-tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ai')}
+        >
+          ✨ AI Task Copilot (Week 13)
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'events' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('events');
+            fetchNotifications();
+          }}
+        >
+          🔔 Async Events (Week 10)
+          {notifications.length > 0 && <span className="tab-badge">{notifications.length}</span>}
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'devops' ? 'active' : ''}`}
+          onClick={() => setActiveTab('devops')}
+        >
+          🐳 Docker & CI/CD (Weeks 11-12)
         </button>
       </div>
 
-      {/* Add Task Form */}
-      <form onSubmit={handleAddTask} className="task-form">
-        <div className="task-form-row">
-          <input
-            type="text"
-            placeholder="Task Title (required)..."
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="input task-title-input"
-            required
-          />
-          <div className="priority-select-wrapper">
-            <span className="priority-emoji">{priorityEmojis[priority]}</span>
-            <select value={priority} onChange={(e) => setPriority(e.target.value)} className="input priority-select">
-              <option value="Low">Low Priority</option>
-              <option value="Medium">Medium Priority</option>
-              <option value="High">High Priority</option>
-            </select>
+      {/* Week 10: Banner for latest emitted async event */}
+      {lastEmittedEvent && (
+        <div className="async-toast-alert">
+          <span className="toast-icon">⚡</span>
+          <div className="toast-content">
+            <strong>Week 10 EventEmitter Dispatched:</strong>
+            <span>API response returned immediately (HTTP 201 at {lastEmittedEvent.apiEmittedAt}). Background notification processing initiated.</span>
           </div>
-        </div>
-        <div className="task-form-row">
-          <input
-            type="text"
-            placeholder="Description (optional details)..."
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="input task-desc-input"
-          />
-          <button type="submit" className="btn btn-add">➕ Add Task</button>
-        </div>
-      </form>
-
-      {/* Error Display */}
-      {error && (
-        <div className="error-card">
-          <div className="error-content">
-            <div>
-              <strong>⚠️ API Request Error</strong>
-              <p>{error}</p>
-            </div>
-            <button className="btn btn-retry" onClick={fetchTasks}>🔁 Retry Request</button>
-          </div>
+          <button className="toast-close" onClick={() => setLastEmittedEvent(null)}>✕</button>
         </div>
       )}
 
-      {/* Loading */}
-      {loading && <div className="loading-spinner">⏳ Loading tasks...</div>}
+      {/* ─── TAB 1: Tasks & CRUD ─── */}
+      {activeTab === 'tasks' && (
+        <>
+          {/* Add Task Form */}
+          <form onSubmit={handleAddTask} className="task-form">
+            <div className="task-form-row">
+              <input
+                type="text"
+                placeholder="Task Title (required)..."
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="input task-title-input"
+                required
+              />
+              <div className="priority-select-wrapper">
+                <span className="priority-emoji">{priorityEmojis[priority]}</span>
+                <select value={priority} onChange={(e) => setPriority(e.target.value)} className="input priority-select">
+                  <option value="Low">Low Priority</option>
+                  <option value="Medium">Medium Priority</option>
+                  <option value="High">High Priority</option>
+                </select>
+              </div>
+            </div>
+            <div className="task-form-row">
+              <input
+                type="text"
+                placeholder="Description (optional details)..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="input task-desc-input"
+              />
+              <button type="submit" className="btn btn-add">➕ Add Task</button>
+              <button
+                type="button"
+                className="btn btn-open-ai"
+                onClick={() => setActiveTab('ai')}
+                title="Auto-fill with AI Copilot"
+              >
+                ✨ AI Assist
+              </button>
+            </div>
+          </form>
 
-      {/* Task List */}
-      {!loading && tasks.length > 0 && (
-        <div className="task-list">
-          {tasks.map(task => (
-            <div key={task._id} className={`task-item ${task.completed ? 'completed' : ''}`}>
-              {editingId === task._id ? (
-                <div className="task-edit-form">
-                  <input
-                    type="text"
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    className="input"
-                  />
-                  <input
-                    type="text"
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    className="input"
-                    placeholder="Description..."
-                  />
-                  <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)} className="input priority-select">
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                  </select>
-                  <div className="task-edit-actions">
-                    <button className="btn btn-save" onClick={() => handleSaveEdit(task._id)}>💾 Save</button>
-                    <button className="btn btn-cancel" onClick={() => setEditingId(null)}>✖ Cancel</button>
-                  </div>
+          {/* Error Display */}
+          {error && (
+            <div className="error-card">
+              <div className="error-content">
+                <div>
+                  <strong>⚠️ API Request Error</strong>
+                  <p>{error}</p>
                 </div>
-              ) : (
-                <div className="task-content">
-                  <div className="task-left">
-                    <input
-                      type="checkbox"
-                      checked={task.completed}
-                      onChange={() => handleToggle(task)}
-                      className="task-checkbox"
-                    />
-                    <div className="task-info">
-                      <span className={`task-title-text ${task.completed ? 'strikethrough' : ''}`}>
-                        {priorityEmojis[task.priority]} {task.title}
-                      </span>
-                      {task.description && <p className="task-desc-text">{task.description}</p>}
-                      <span className={`task-priority-badge priority-${task.priority.toLowerCase()}`}>
-                        {task.priority}
-                      </span>
+                <button className="btn btn-retry" onClick={fetchTasks}>🔁 Retry Request</button>
+              </div>
+            </div>
+          )}
+
+          {/* Loading */}
+          {loading && <div className="loading-spinner">⏳ Loading tasks...</div>}
+
+          {/* Task List */}
+          {!loading && tasks.length > 0 && (
+            <div className="task-list">
+              {tasks.map(task => (
+                <div key={task._id} className={`task-item ${task.completed ? 'completed' : ''}`}>
+                  {editingId === task._id ? (
+                    <div className="task-edit-form">
+                      <input
+                        type="text"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        className="input"
+                      />
+                      <input
+                        type="text"
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        className="input"
+                        placeholder="Description..."
+                      />
+                      <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)} className="input priority-select">
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                      </select>
+                      <div className="task-edit-actions">
+                        <button className="btn btn-save" onClick={() => handleSaveEdit(task._id)}>💾 Save</button>
+                        <button className="btn btn-cancel" onClick={() => setEditingId(null)}>✖ Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="task-content">
+                      <div className="task-left">
+                        <input
+                          type="checkbox"
+                          checked={task.completed}
+                          onChange={() => handleToggle(task)}
+                          className="task-checkbox"
+                        />
+                        <div className="task-info">
+                          <span className={`task-title-text ${task.completed ? 'strikethrough' : ''}`}>
+                            {priorityEmojis[task.priority]} {task.title}
+                          </span>
+                          {task.description && <p className="task-desc-text">{task.description}</p>}
+                          <span className={`task-priority-badge priority-${task.priority.toLowerCase()}`}>
+                            {task.priority}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="task-actions">
+                        <button className="btn btn-edit" onClick={() => startEdit(task)}>✏️ Edit</button>
+                        <button className="btn btn-delete" onClick={() => handleDelete(task._id)}>🗑️ Delete</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!loading && !error && tasks.length === 0 && (
+            <p className="no-tasks">No tasks yet. Add your first task above or use the AI Copilot! 🚀</p>
+          )}
+        </>
+      )}
+
+      {/* ─── TAB 2: Week 13 AI Copilot ─── */}
+      {activeTab === 'ai' && (
+        <AITaskAssistant
+          onApplyToForm={handleApplyFromAI}
+          onAddTaskDirectly={handleAddTaskDirectly}
+        />
+      )}
+
+      {/* ─── TAB 3: Week 10 Async EventEmitter Notifications & Observability ─── */}
+      {activeTab === 'events' && (
+        <div className="events-panel">
+          <div className="events-panel-header">
+            <div>
+              <h3 className="events-title">🔔 Week 10: Asynchronous EventEmitter Background Dispatcher</h3>
+              <p className="events-subtitle">
+                Demonstrates non-blocking background notifications using Node.js native EventEmitter.
+                The API returns HTTP 201 immediately while the event handler completes asynchronously.
+              </p>
+            </div>
+            <div className="events-actions">
+              <button className="btn btn-refresh-sm" onClick={fetchNotifications} disabled={loadingNotifs}>
+                🔄 Refresh Logs
+              </button>
+              <button className="btn btn-clear-sm" onClick={handleClearNotifications}>
+                🧹 Clear Log
+              </button>
+            </div>
+          </div>
+
+          <div className="events-architecture-callout">
+            <div className="callout-step">
+              <span className="step-num">1</span>
+              <div className="step-body">
+                <strong>Sync API Call</strong>
+                <p>Client sends POST /api/tasks. Task is saved to database.</p>
+              </div>
+            </div>
+            <div className="callout-arrow">➔</div>
+            <div className="callout-step highlight">
+              <span className="step-num">2</span>
+              <div className="step-body">
+                <strong>Immediate Return (Non-blocking)</strong>
+                <p>Server emits 'task:created' and returns HTTP 201 instantly.</p>
+              </div>
+            </div>
+            <div className="callout-arrow">➔</div>
+            <div className="callout-step">
+              <span className="step-num">3</span>
+              <div className="step-body">
+                <strong>Async Background Listener</strong>
+                <p>EventEmitter listener runs in background, logs timestamps & notifies user.</p>
+              </div>
+            </div>
+          </div>
+
+          {loadingNotifs && <div className="loading-spinner">⏳ Fetching event audit trail...</div>}
+
+          {!loadingNotifs && notifications.length === 0 && (
+            <div className="no-events-box">
+              <p>No background events recorded yet.</p>
+              <p className="hint">Create a task in the "Tasks" tab to see the live EventEmitter timestamp comparison here! ⚡</p>
+            </div>
+          )}
+
+          {!loadingNotifs && notifications.length > 0 && (
+            <div className="events-timeline">
+              {notifications.map((notif) => (
+                <div key={notif.id} className="event-log-card">
+                  <div className="event-log-header">
+                    <span className="event-badge">📩 task:created</span>
+                    <span className="event-task-name">"{notif.taskTitle}"</span>
+                    <span className="event-user">👤 User: {notif.user}</span>
+                    <span className="event-status-badge">✅ {notif.status}</span>
+                  </div>
+
+                  <div className="event-timestamps-grid">
+                    <div className="timestamp-item">
+                      <span className="ts-label">⚡ API Response Timestamp:</span>
+                      <code className="ts-value">{notif.apiEmittedAt}</code>
+                      <span className="ts-subtext">Immediate synchronous HTTP return</span>
+                    </div>
+
+                    <div className="timestamp-item">
+                      <span className="ts-label">🕒 Handler Started Timestamp:</span>
+                      <code className="ts-value">{notif.handlerStartedAt}</code>
+                      <span className="ts-subtext">Asynchronous listener triggered</span>
+                    </div>
+
+                    <div className="timestamp-item">
+                      <span className="ts-label">🏁 Handler Completed Timestamp:</span>
+                      <code className="ts-value">{notif.handlerCompletedAt}</code>
+                      <span className="ts-subtext">Background notification finalized</span>
+                    </div>
+
+                    <div className="timestamp-item delta-item">
+                      <span className="ts-label">⏱️ Execution Time Delta:</span>
+                      <span className="ts-delta">+{notif.executionDeltaMs} ms</span>
+                      <span className="ts-subtext">Proof of non-blocking background queue</span>
                     </div>
                   </div>
-                  <div className="task-actions">
-                    <button className="btn btn-edit" onClick={() => startEdit(task)}>✏️ Edit</button>
-                    <button className="btn btn-delete" onClick={() => handleDelete(task._id)}>🗑️ Delete</button>
-                  </div>
                 </div>
-              )}
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
 
-      {!loading && !error && tasks.length === 0 && (
-        <p className="no-tasks">No tasks yet. Add your first task above! 🚀</p>
+      {/* ─── TAB 4: Weeks 11 & 12 Docker Containerization & CI/CD Pipeline ─── */}
+      {activeTab === 'devops' && (
+        <div className="devops-panel">
+          {/* Week 11 Docker Section */}
+          <div className="devops-card">
+            <div className="devops-card-header">
+              <div className="devops-icon">🐳</div>
+              <div>
+                <h3 className="devops-title">Week 11: Containerization with Docker & Docker Compose</h3>
+                <p className="devops-desc">
+                  Multi-container orchestration for React Frontend (Nginx Alpine), Node/Express Backend, and MongoDB Database.
+                </p>
+              </div>
+            </div>
+
+            <div className="containers-grid">
+              <div className="container-box">
+                <span className="container-tag">Frontend Service</span>
+                <h4 className="container-name">awf-frontend</h4>
+                <p className="container-detail">Multi-stage build with Node 20 & Nginx Alpine</p>
+                <code className="container-port">Port: 80 / 3000</code>
+                <span className="container-status">Active (Dockerfile configured)</span>
+              </div>
+
+              <div className="container-box">
+                <span className="container-tag">Backend Service</span>
+                <h4 className="container-name">awf-backend</h4>
+                <p className="container-detail">Node.js Express REST API & EventEmitter</p>
+                <code className="container-port">Port: 5000</code>
+                <span className="container-status">Active (Dockerfile configured)</span>
+              </div>
+
+              <div className="container-box">
+                <span className="container-tag">Database Service</span>
+                <h4 className="container-name">awf-mongodb</h4>
+                <p className="container-detail">Official MongoDB 6.0 with persistent data volume</p>
+                <code className="container-port">Port: 27017</code>
+                <span className="container-status">Active (Volume mounted)</span>
+              </div>
+            </div>
+
+            <div className="devops-command-box">
+              <span className="cmd-label">💻 Single command to orchestrate entire stack:</span>
+              <pre className="cmd-code">docker-compose up --build</pre>
+            </div>
+          </div>
+
+          {/* Week 12 CI/CD Section */}
+          <div className="devops-card">
+            <div className="devops-card-header">
+              <div className="devops-icon">🚀</div>
+              <div>
+                <h3 className="devops-title">Week 12: CI/CD Pipeline with GitHub Actions</h3>
+                <p className="devops-desc">
+                  Automated testing, build verification, and pass/fail reporting on every push to main branch.
+                </p>
+              </div>
+            </div>
+
+            <div className="ci-pipeline-flow">
+              <div className="ci-stage passed">
+                <span className="ci-status-icon">✓</span>
+                <div className="ci-stage-info">
+                  <strong>1. Backend Test Suite</strong>
+                  <p>Node 20.x & 22.x matrix, EventEmitter async validation, schema tests</p>
+                </div>
+              </div>
+
+              <div className="ci-arrow">➔</div>
+
+              <div className="ci-stage passed">
+                <span className="ci-status-icon">✓</span>
+                <div className="ci-stage-info">
+                  <strong>2. Frontend Production Build</strong>
+                  <p>Vite Rollup chunking, minification, and syntax tree validation</p>
+                </div>
+              </div>
+
+              <div className="ci-arrow">➔</div>
+
+              <div className="ci-stage passed">
+                <span className="ci-status-icon">✓</span>
+                <div className="ci-stage-info">
+                  <strong>3. CI Pass/Fail Reporting</strong>
+                  <p>Workflow dispatch, status badge generation, deployment readiness</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="ci-demo-box">
+              <strong>🧪 Week 12 Demonstration (Broken Pipeline vs. Successful Pipeline):</strong>
+              <div className="demo-commands">
+                <div className="demo-cmd-row">
+                  <span className="demo-badge-fail">Demonstrate Broken Test:</span>
+                  <code>npm run test:fail-demo</code> (Throws intentional assertion error, pipeline fails)
+                </div>
+                <div className="demo-cmd-row">
+                  <span className="demo-badge-pass">Demonstrate Successful Fix:</span>
+                  <code>npm test</code> (All 5 automated tests pass with green checks)
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );
