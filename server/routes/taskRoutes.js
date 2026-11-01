@@ -6,20 +6,22 @@ const auth = require('../middleware/auth');
 const { taskValidationRules, validate } = require('../middleware/validate');
 const taskEmitter = require('../events/taskEmitter');
 
-// Initialize node-cache (TTL: 600 seconds = 10 minutes)
+// ─── Week 9: In-Memory Caching (node-cache) ───
+// Initialize in-memory cache with standard TTL of 600 seconds (10 minutes)
 const taskCache = new NodeCache({ stdTTL: 600, checkperiod: 120 });
 const TASKS_CACHE_KEY = 'all_tasks';
 
-// Helper function to invalidate tasks cache
+// Invalidation helper to clear cache on write operations (POST, PUT, DELETE)
 const invalidateCache = () => {
   const keysDeleted = taskCache.del(TASKS_CACHE_KEY);
   if (keysDeleted > 0) {
-    console.log(`🧹 [Cache Invalidation] Successfully cleared '${TASKS_CACHE_KEY}' from node-cache`);
+    console.log(`🧹 [Cache Invalidation] Cleared '${TASKS_CACHE_KEY}' from node-cache`);
   }
   return keysDeleted;
 };
 
-// Week 10: GET /api/tasks/notifications - Get background async notification log
+// ─── Week 10: Async EventEmitter Notification Endpoints ───
+// GET /api/tasks/notifications - Get background async notification log
 router.get('/notifications', (req, res) => {
   const notifications = taskEmitter.getRecentNotifications();
   res.json({
@@ -28,89 +30,108 @@ router.get('/notifications', (req, res) => {
   });
 });
 
-// Week 10: DELETE /api/tasks/notifications - Clear background notifications
+// DELETE /api/tasks/notifications - Clear background notifications
 router.delete('/notifications', (req, res) => {
   taskEmitter.clearNotifications();
   res.json({ message: 'Async notification buffer cleared' });
 });
 
+// POST /api/tasks/test-event - Dispatch an async test event for demonstration
+router.post('/test-event', (req, res) => {
+  const apiEmittedAt = new Date().toISOString();
+  const testTitle = req.body.title || `Async Task #${Math.floor(Math.random() * 900 + 100)}`;
+  const testUser = req.body.user || 'Ashvi Antala (24IT001)';
+  const priority = req.body.priority || 'High';
+
+  setImmediate(() => {
+    taskEmitter.emit('task:created', {
+      _id: `test_${Date.now()}`,
+      title: testTitle,
+      priority,
+      user: testUser,
+      apiEmittedAt,
+      simulatedDelayMs: 400
+    });
+  });
+
+  res.status(201).json({
+    message: 'Event dispatched asynchronously to background listener',
+    apiEmittedAt,
+    title: testTitle,
+    user: testUser
+  });
+});
+
+// ─── Week 9: Cache Inspection & Clearing Endpoints ───
 // GET /api/tasks/cache-stats - Get in-memory cache statistics
 router.get('/cache-stats', (req, res) => {
   const stats = taskCache.getStats();
   const keys = taskCache.keys();
+  const isCached = taskCache.has(TASKS_CACHE_KEY);
+  const ttl = taskCache.getTtl(TASKS_CACHE_KEY);
+  const ttlRemaining = ttl ? Math.max(0, Math.round((ttl - Date.now()) / 1000)) : 0;
+
   res.json({
-    cached: taskCache.has(TASKS_CACHE_KEY),
+    cached: isCached,
     keys,
     stats,
-    ttl: taskCache.getTtl(TASKS_CACHE_KEY) ? Math.round((taskCache.getTtl(TASKS_CACHE_KEY) - Date.now()) / 1000) : 0
+    ttlRemaining: `${ttlRemaining}s`
   });
 });
 
-// POST /api/tasks/clear-cache - Manual cache clear endpoint for benchmarking
+// POST /api/tasks/clear-cache - Manual cache clear endpoint
 router.post('/clear-cache', (req, res) => {
   invalidateCache();
-  res.json({ message: 'Task cache manually cleared', cached: false });
+  res.json({ message: 'In-memory node-cache successfully cleared', cached: false });
 });
 
-// GET /api/tasks - Get all tasks (with node-cache in-memory caching)
+// ─── Week 4, 5, 6, 9: GET /api/tasks - Get all tasks with In-Memory Caching ───
 router.get('/', async (req, res) => {
   const startTime = Date.now();
   const forceNoCache = req.query.nocache === 'true';
 
   try {
-    // Check if tasks exist in cache and nocache flag is not passed
+    // Check if tasks exist in in-memory cache and nocache is not forced
     if (!forceNoCache && taskCache.has(TASKS_CACHE_KEY)) {
       const cachedTasks = taskCache.get(TASKS_CACHE_KEY);
-      const responseTime = Date.now() - startTime;
+      const responseTime = Math.max(1, Date.now() - startTime);
 
       res.setHeader('X-Cache', 'HIT');
       res.setHeader('X-Response-Time', `${responseTime}ms`);
-      
-      return res.json({
-        data: cachedTasks,
-        source: 'cache',
-        cacheHeader: 'X-Cache: HIT',
-        responseTime: `${responseTime} ms`
-      });
+      return res.json(cachedTasks);
     }
 
-    // Cache MISS: Fetch from MongoDB database
+    // Cache MISS: Query MongoDB database
     const tasks = await Task.find().sort({ createdAt: -1 });
-    const responseTime = Date.now() - startTime;
+    const responseTime = Math.max(1, Date.now() - startTime);
 
-    // Store in node-cache if not forced no-cache
+    // Save in node-cache if caching is not explicitly bypassed
     if (!forceNoCache) {
       taskCache.set(TASKS_CACHE_KEY, tasks);
     }
 
     res.setHeader('X-Cache', 'MISS');
     res.setHeader('X-Response-Time', `${responseTime}ms`);
-
-    res.json({
-      data: tasks,
-      source: forceNoCache ? 'nocache_bypassed' : 'database',
-      cacheHeader: 'X-Cache: MISS',
-      responseTime: `${responseTime} ms`
-    });
+    return res.json(tasks);
   } catch (error) {
     res.status(500).json({ message: 'Server error fetching tasks', error: error.message });
   }
 });
 
-// POST /api/tasks - Create a new task (Week 10: Emits task:created event asynchronously)
+// ─── Week 4, 5, 6, 7, 9, 10: POST /api/tasks - Create a new task ───
 router.post('/', taskValidationRules, validate, async (req, res) => {
   try {
     const { title, description, priority, assignedUser } = req.body;
     const task = new Task({ title, description, priority });
     const savedTask = await task.save();
 
-    // Invalidate cache on write
+    // Week 9: Invalidate cache on write
     invalidateCache();
 
     // ─── Week 10: Native EventEmitter Asynchronous Processing ───
     const apiEmittedAt = new Date().toISOString();
-    console.log(`\n⚡ [WEEK 10 SYNC API RESPONSE] Returning HTTP 201 for "${savedTask.title}" at ${apiEmittedAt}`);
-    
+    console.log(`\n⚡ [ SYNC API RESPONSE] Returning HTTP 201 for "${savedTask.title}" at ${apiEmittedAt}`);
+
     // Asynchronously emit event without awaiting its background completion
     setImmediate(() => {
       taskEmitter.emit('task:created', {
@@ -124,7 +145,7 @@ router.post('/', taskValidationRules, validate, async (req, res) => {
       });
     });
 
-    // Main API response returns IMMEDIATELY without waiting for event handler
+    // Main API response returns IMMEDIATELY without waiting for background event handler
     const responseData = savedTask.toObject();
     responseData._asyncNotification = {
       event: 'task:created',
@@ -141,7 +162,7 @@ router.post('/', taskValidationRules, validate, async (req, res) => {
   }
 });
 
-// PUT /api/tasks/:id - Update a task (Invalidates Cache)
+// ─── Week 4, 5, 6, 7, 9: PUT /api/tasks/:id - Update a task ───
 router.put('/:id', taskValidationRules, validate, async (req, res) => {
   try {
     const { title, description, priority, completed } = req.body;
@@ -150,11 +171,12 @@ router.put('/:id', taskValidationRules, validate, async (req, res) => {
       { title, description, priority, completed },
       { new: true, runValidators: true }
     );
+
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Invalidate cache on write
+    // Week 9: Invalidate cache on write
     invalidateCache();
 
     res.json(task);
@@ -166,7 +188,7 @@ router.put('/:id', taskValidationRules, validate, async (req, res) => {
   }
 });
 
-// DELETE /api/tasks/:id - Delete a task (Invalidates Cache)
+// ─── Week 4, 5, 6, 7, 9: DELETE /api/tasks/:id - Delete a task ───
 router.delete('/:id', async (req, res) => {
   try {
     const task = await Task.findByIdAndDelete(req.params.id);
@@ -174,7 +196,7 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Invalidate cache on write
+    // Week 9: Invalidate cache on write
     invalidateCache();
 
     res.json({ message: 'Task deleted successfully', task });
@@ -184,4 +206,3 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
-

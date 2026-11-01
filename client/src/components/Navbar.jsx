@@ -1,38 +1,26 @@
-import { useState, useEffect } from 'react';
-import { NavLink, Link } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
 import AuthModal from './AuthModal';
 import './Navbar.css';
 
-function Navbar() {
+function Navbar({ user, onLogout, onLoginSuccess }) {
+  const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
-        console.error('Failed to parse user from localStorage', e);
-      }
-    }
-  }, []);
 
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
     document.body.classList.toggle('light-mode', isDarkMode);
   };
 
-  const handleLoginSuccess = (userData) => {
-    setUser(userData);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
-    setIsAuthOpen(false);
+  const handleLogoutClick = () => {
+    if (onLogout) {
+      onLogout();
+    } else {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
+    navigate('/login');
   };
 
   return (
@@ -66,24 +54,34 @@ function Navbar() {
           </button>
 
           {user ? (
-            <button className="auth-btn logged-in" onClick={() => setIsAuthOpen(true)}>
-              <span className="user-badge">👤 {user.username}</span>
-            </button>
+            <div className="logged-in-wrap">
+              <span className="user-badge" style={{ color: '#86efac', fontWeight: 600 }}>
+                👤 {user.username}
+              </span>
+              <button
+                type="button"
+                className="auth-btn btn-logout-nav"
+                onClick={handleLogoutClick}
+                title="Logout from account"
+              >
+                🚪 Logout
+              </button>
+            </div>
           ) : (
-            <button className="auth-btn" onClick={() => setIsAuthOpen(true)}>
-              <span className="auth-icon">✏️</span> Login / Register
-            </button>
+            <Link to="/login" className="auth-btn" style={{ textDecoration: 'none' }}>
+              <span className="auth-icon">🔑</span> Login
+            </Link>
           )}
         </div>
       </div>
 
-      {/* Auth Modal */}
+      {/* Optional Auth Modal */}
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
-        onLoginSuccess={handleLoginSuccess}
+        onLoginSuccess={onLoginSuccess}
         user={user}
-        onLogout={handleLogout}
+        onLogout={handleLogoutClick}
       />
     </header>
   );

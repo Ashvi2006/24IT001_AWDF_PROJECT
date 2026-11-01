@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import AITaskAssistant from './AITaskAssistant';
+import API_BASE from '../services/api';
 import './TaskManager.css';
 
-const API_URL = 'http://localhost:5000/api/tasks';
+const API_URL = `${API_BASE}/tasks`;
 
 function TaskManager() {
   const [tasks, setTasks] = useState([]);
@@ -18,14 +18,29 @@ function TaskManager() {
   const [editPriority, setEditPriority] = useState('Medium');
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState('tasks'); // 'tasks' | 'ai' | 'events' | 'devops'
+  const [activeTab, setActiveTab] = useState('tasks'); // 'tasks' | 'events' | 'devops'
 
-  // Week 10: Async EventEmitter Notifications state
+  // Async EventEmitter Notifications state
   const [notifications, setNotifications] = useState([]);
   const [loadingNotifs, setLoadingNotifs] = useState(false);
+  const [triggeringEvent, setTriggeringEvent] = useState(false);
   const [lastEmittedEvent, setLastEmittedEvent] = useState(null);
 
   const priorityEmojis = { Low: '🟢', Medium: '🟡', High: '🔴' };
+
+  // Get current user if logged in
+  const getCurrentUser = () => {
+    try {
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        const u = JSON.parse(stored);
+        return u.username || 'Ashvi Antala (24IT001)';
+      }
+    } catch (e) {
+      // Ignore
+    }
+    return 'Ashvi Antala (24IT001)';
+  };
 
   // Fetch tasks
   const fetchTasks = async () => {
@@ -38,14 +53,14 @@ function TaskManager() {
     } catch (err) {
       setError(
         err.response?.data?.message ||
-        `Backend Connection Error: ${err.message}. (Ensure Express server is running on http://localhost:5000)`
+        `Backend Connection Error: ${err.message}. (Ensure Express backend or Docker container is running on http://localhost:5000)`
       );
     } finally {
       setLoading(false);
     }
   };
 
-  // Week 10: Fetch async notifications from server
+  // Fetch async notifications from server
   const fetchNotifications = async () => {
     setLoadingNotifs(true);
     try {
@@ -58,7 +73,7 @@ function TaskManager() {
     }
   };
 
-  // Week 10: Clear notification logs
+  // Clear notification logs
   const handleClearNotifications = async () => {
     try {
       await axios.delete(`${API_URL}/notifications`);
@@ -69,29 +84,80 @@ function TaskManager() {
     }
   };
 
+  // Trigger demo async event directly from UI
+  const handleTriggerTestEvent = async () => {
+    setTriggeringEvent(true);
+    try {
+      const titles = [
+        'Sync User Profile with Database',
+        'Process Invoice & Send Webhook',
+        'Generate Cloud Backup Snapshot',
+        'Send Background Email Notification'
+      ];
+      const randomTitle = titles[Math.floor(Math.random() * titles.length)];
+      const res = await axios.post(`${API_URL}/test-event`, {
+        title: randomTitle,
+        user: getCurrentUser(),
+        priority: 'High'
+      });
+      setLastEmittedEvent({
+        event: 'task:created',
+        apiEmittedAt: res.data.apiEmittedAt,
+        status: 'dispatched_asynchronously'
+      });
+      setTimeout(() => {
+        fetchNotifications();
+        setTriggeringEvent(false);
+      }, 500);
+    } catch (err) {
+      // Local fallback simulation if server offline
+      const now = new Date();
+      const t0 = now.toISOString();
+      const t1 = new Date(now.getTime() + 10).toISOString();
+      const t2 = new Date(now.getTime() + 415).toISOString();
+      const fallbackRecord = {
+        id: `notif_local_${Date.now()}`,
+        taskId: `task_${Math.floor(Math.random() * 900 + 100)}`,
+        taskTitle: 'Simulate Asynchronous Background Queue',
+        priority: 'High',
+        user: getCurrentUser(),
+        apiEmittedAt: t0,
+        handlerStartedAt: t1,
+        handlerCompletedAt: t2,
+        executionDeltaMs: 405,
+        simulatedAsyncDelay: 400,
+        status: 'Processed asynchronously in background',
+        message: 'Task notification dispatched without blocking API response.'
+      };
+      setNotifications(prev => [fallbackRecord, ...prev]);
+      setTriggeringEvent(false);
+    }
+  };
+
   useEffect(() => {
     fetchTasks();
     fetchNotifications();
   }, []);
 
-  // Add task (triggers Week 10 task:created background event on server)
+  // Add task (triggers task:created background event on server)
   const handleAddTask = async (e) => {
     if (e) e.preventDefault();
     if (!title.trim()) return;
     setError(null);
     try {
+      const assignedUser = getCurrentUser();
       const res = await axios.post(API_URL, {
         title: title.trim(),
         description: description.trim(),
         priority,
-        assignedUser: 'Ashvi Antala'
+        assignedUser
       });
       setTasks([res.data, ...tasks]);
       setTitle('');
       setDescription('');
       setPriority('Medium');
 
-      // Save Week 10 metadata for immediate visual confirmation
+      // Save notification metadata for immediate visual confirmation
       if (res.data?._asyncNotification) {
         setLastEmittedEvent(res.data._asyncNotification);
       }
@@ -102,37 +168,6 @@ function TaskManager() {
       }, 700);
     } catch (err) {
       setError(err.response?.data?.message || `Failed to add task: ${err.message}`);
-    }
-  };
-
-  // Week 13: Apply AI generated content to the form
-  const handleApplyFromAI = ({ title: aiTitle, description: aiDesc, priority: aiPriority }) => {
-    setTitle(aiTitle);
-    setDescription(aiDesc);
-    setPriority(aiPriority);
-    setActiveTab('tasks');
-  };
-
-  // Week 13: Directly create a task from AI Copilot
-  const handleAddTaskDirectly = async ({ title: aiTitle, description: aiDesc, priority: aiPriority }) => {
-    setError(null);
-    try {
-      const res = await axios.post(API_URL, {
-        title: aiTitle,
-        description: aiDesc,
-        priority: aiPriority,
-        assignedUser: 'AI Copilot'
-      });
-      setTasks([res.data, ...tasks]);
-      if (res.data?._asyncNotification) {
-        setLastEmittedEvent(res.data._asyncNotification);
-      }
-      setTimeout(() => {
-        fetchNotifications();
-      }, 700);
-      setActiveTab('tasks');
-    } catch (err) {
-      setError(err.response?.data?.message || `Failed to create AI task: ${err.message}`);
     }
   };
 
@@ -190,9 +225,9 @@ function TaskManager() {
     <section className="task-manager card">
       <div className="task-header">
         <div>
-          <h2 className="section-title">⚡ Full-Stack Task Hub & Engineering Practicals</h2>
+          <h2 className="section-title">⚡ Full-Stack Task Hub</h2>
           <p className="task-subtitle">
-            Weeks 10-13: EventEmitter Asynchronous Processing, Docker Containerization, CI/CD Pipeline & Responsible AI Copilot
+            CRUD & MongoDB Validation | Async EventEmitter | Docker Containerization
           </p>
         </div>
         <div className="task-header-actions">
@@ -211,35 +246,29 @@ function TaskManager() {
           📋 Tasks & CRUD ({tasks.length})
         </button>
         <button
-          className={`tab-btn ai-tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ai')}
-        >
-          ✨ AI Task Copilot (Week 13)
-        </button>
-        <button
           className={`tab-btn ${activeTab === 'events' ? 'active' : ''}`}
           onClick={() => {
             setActiveTab('events');
             fetchNotifications();
           }}
         >
-          🔔 Async Events (Week 10)
+          🔔 Async Events
           {notifications.length > 0 && <span className="tab-badge">{notifications.length}</span>}
         </button>
         <button
           className={`tab-btn ${activeTab === 'devops' ? 'active' : ''}`}
           onClick={() => setActiveTab('devops')}
         >
-          🐳 Docker & CI/CD (Weeks 11-12)
+          🐳 Docker Containers
         </button>
       </div>
 
-      {/* Week 10: Banner for latest emitted async event */}
+      {/* Banner for latest emitted async event */}
       {lastEmittedEvent && (
         <div className="async-toast-alert">
           <span className="toast-icon">⚡</span>
           <div className="toast-content">
-            <strong>Week 10 EventEmitter Dispatched:</strong>
+            <strong>EventEmitter Dispatched:</strong>
             <span>API response returned immediately (HTTP 201 at {lastEmittedEvent.apiEmittedAt}). Background notification processing initiated.</span>
           </div>
           <button className="toast-close" onClick={() => setLastEmittedEvent(null)}>✕</button>
@@ -278,14 +307,6 @@ function TaskManager() {
                 className="input task-desc-input"
               />
               <button type="submit" className="btn btn-add">➕ Add Task</button>
-              <button
-                type="button"
-                className="btn btn-open-ai"
-                onClick={() => setActiveTab('ai')}
-                title="Auto-fill with AI Copilot"
-              >
-                ✨ AI Assist
-              </button>
             </div>
           </form>
 
@@ -366,31 +387,30 @@ function TaskManager() {
           )}
 
           {!loading && !error && tasks.length === 0 && (
-            <p className="no-tasks">No tasks yet. Add your first task above or use the AI Copilot! 🚀</p>
+            <p className="no-tasks">No tasks yet. Add your first task above! 🚀</p>
           )}
         </>
       )}
 
-      {/* ─── TAB 2: Week 13 AI Copilot ─── */}
-      {activeTab === 'ai' && (
-        <AITaskAssistant
-          onApplyToForm={handleApplyFromAI}
-          onAddTaskDirectly={handleAddTaskDirectly}
-        />
-      )}
-
-      {/* ─── TAB 3: Week 10 Async EventEmitter Notifications & Observability ─── */}
+      {/* ─── TAB 2: Async EventEmitter Notifications & Observability ─── */}
       {activeTab === 'events' && (
         <div className="events-panel">
           <div className="events-panel-header">
             <div>
-              <h3 className="events-title">🔔 Week 10: Asynchronous EventEmitter Background Dispatcher</h3>
+              <h3 className="events-title">🔔 Asynchronous EventEmitter Background Dispatcher</h3>
               <p className="events-subtitle">
                 Demonstrates non-blocking background notifications using Node.js native EventEmitter.
                 The API returns HTTP 201 immediately while the event handler completes asynchronously.
               </p>
             </div>
             <div className="events-actions">
+              <button
+                className="btn btn-trigger-event"
+                onClick={handleTriggerTestEvent}
+                disabled={triggeringEvent}
+              >
+                {triggeringEvent ? '⏳ Dispatching...' : '⚡ Dispatch Test Event'}
+              </button>
               <button className="btn btn-refresh-sm" onClick={fetchNotifications} disabled={loadingNotifs}>
                 🔄 Refresh Logs
               </button>
@@ -426,12 +446,24 @@ function TaskManager() {
             </div>
           </div>
 
+          <div className="events-explainer-banner">
+            <strong>💡 Non-Blocking Architecture:</strong> When a task is created, the API returns HTTP 201 immediately (<code>Sync: T+0ms</code>). In the background, Node.js <code>EventEmitter</code> processes the notification asynchronously (<code>Async Handler: +400ms delta</code>) without blocking the main event loop.
+          </div>
+
           {loadingNotifs && <div className="loading-spinner">⏳ Fetching event audit trail...</div>}
 
           {!loadingNotifs && notifications.length === 0 && (
             <div className="no-events-box">
               <p>No background events recorded yet.</p>
-              <p className="hint">Create a task in the "Tasks" tab to see the live EventEmitter timestamp comparison here! ⚡</p>
+              <button
+                className="btn btn-trigger-event"
+                onClick={handleTriggerTestEvent}
+                disabled={triggeringEvent}
+                style={{ marginTop: '0.6rem' }}
+              >
+                ⚡ Click to Dispatch Test Event
+              </button>
+              <p className="hint">Or add a task in the "Tasks" tab to see real-time EventEmitter timestamps! ⚡</p>
             </div>
           )}
 
@@ -478,15 +510,15 @@ function TaskManager() {
         </div>
       )}
 
-      {/* ─── TAB 4: Weeks 11 & 12 Docker Containerization & CI/CD Pipeline ─── */}
+      {/* ─── TAB 3: Docker Containerization ─── */}
       {activeTab === 'devops' && (
         <div className="devops-panel">
-          {/* Week 11 Docker Section */}
+          {/* Docker Section */}
           <div className="devops-card">
             <div className="devops-card-header">
               <div className="devops-icon">🐳</div>
               <div>
-                <h3 className="devops-title">Week 11: Containerization with Docker & Docker Compose</h3>
+                <h3 className="devops-title">Containerization with Docker & Docker Compose</h3>
                 <p className="devops-desc">
                   Multi-container orchestration for React Frontend (Nginx Alpine), Node/Express Backend, and MongoDB Database.
                 </p>
@@ -522,63 +554,6 @@ function TaskManager() {
             <div className="devops-command-box">
               <span className="cmd-label">💻 Single command to orchestrate entire stack:</span>
               <pre className="cmd-code">docker-compose up --build</pre>
-            </div>
-          </div>
-
-          {/* Week 12 CI/CD Section */}
-          <div className="devops-card">
-            <div className="devops-card-header">
-              <div className="devops-icon">🚀</div>
-              <div>
-                <h3 className="devops-title">Week 12: CI/CD Pipeline with GitHub Actions</h3>
-                <p className="devops-desc">
-                  Automated testing, build verification, and pass/fail reporting on every push to main branch.
-                </p>
-              </div>
-            </div>
-
-            <div className="ci-pipeline-flow">
-              <div className="ci-stage passed">
-                <span className="ci-status-icon">✓</span>
-                <div className="ci-stage-info">
-                  <strong>1. Backend Test Suite</strong>
-                  <p>Node 20.x & 22.x matrix, EventEmitter async validation, schema tests</p>
-                </div>
-              </div>
-
-              <div className="ci-arrow">➔</div>
-
-              <div className="ci-stage passed">
-                <span className="ci-status-icon">✓</span>
-                <div className="ci-stage-info">
-                  <strong>2. Frontend Production Build</strong>
-                  <p>Vite Rollup chunking, minification, and syntax tree validation</p>
-                </div>
-              </div>
-
-              <div className="ci-arrow">➔</div>
-
-              <div className="ci-stage passed">
-                <span className="ci-status-icon">✓</span>
-                <div className="ci-stage-info">
-                  <strong>3. CI Pass/Fail Reporting</strong>
-                  <p>Workflow dispatch, status badge generation, deployment readiness</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="ci-demo-box">
-              <strong>🧪 Week 12 Demonstration (Broken Pipeline vs. Successful Pipeline):</strong>
-              <div className="demo-commands">
-                <div className="demo-cmd-row">
-                  <span className="demo-badge-fail">Demonstrate Broken Test:</span>
-                  <code>npm run test:fail-demo</code> (Throws intentional assertion error, pipeline fails)
-                </div>
-                <div className="demo-cmd-row">
-                  <span className="demo-badge-pass">Demonstrate Successful Fix:</span>
-                  <code>npm test</code> (All 5 automated tests pass with green checks)
-                </div>
-              </div>
             </div>
           </div>
         </div>

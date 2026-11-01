@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import API_BASE from '../services/api';
 import './PerformanceMetrics.css';
 
 function PerformanceMetrics() {
   const [benchmarkStatus, setBenchmarkStatus] = useState(null);
   const [loadingBenchmark, setLoadingBenchmark] = useState(false);
 
-  // Week 9: Server-side caching benchmark state initialized with baseline metrics
+  // Server-side caching benchmark state initialized with baseline metrics
   const [cacheBenchmark, setCacheBenchmark] = useState({
     missTime: '148 ms',
     hitTime: '4 ms',
@@ -29,7 +30,7 @@ function PerformanceMetrics() {
 
   const fetchCacheStats = async () => {
     try {
-      const statsRes = await axios.get('http://localhost:5000/api/tasks/cache-stats');
+      const statsRes = await axios.get(`${API_BASE}/tasks/cache-stats`);
       setCacheStats(statsRes.data);
     } catch (err) {
       // Backend not active yet or error
@@ -56,22 +57,22 @@ function PerformanceMetrics() {
     }, 600);
   };
 
-  // Week 9: Server-side node-cache Live API Benchmark
+  // Server-side node-cache Live API Benchmark
   const runCacheBenchmark = async () => {
     setLoadingCacheBenchmark(true);
     try {
       // Step 1: Uncached call (Cache MISS - forcing database fetch)
       const t1Start = performance.now();
-      const uncachedRes = await axios.get('http://localhost:5000/api/tasks?nocache=true');
+      const uncachedRes = await axios.get(`${API_BASE}/tasks?nocache=true`);
       const t1End = performance.now();
       const missTime = Math.max(1, Math.round(t1End - t1Start));
 
       // Ensure cache is populated with standard call
-      await axios.get('http://localhost:5000/api/tasks');
+      await axios.get(`${API_BASE}/tasks`);
 
       // Step 2: Cached call (Cache HIT - from node-cache RAM)
       const t2Start = performance.now();
-      const cachedRes = await axios.get('http://localhost:5000/api/tasks');
+      const cachedRes = await axios.get(`${API_BASE}/tasks`);
       const t2End = performance.now();
       const hitTime = Math.max(1, Math.round(t2End - t2Start));
 
@@ -116,7 +117,7 @@ function PerformanceMetrics() {
 
   const clearServerCache = async () => {
     try {
-      await axios.post('http://localhost:5000/api/tasks/clear-cache');
+      await axios.post(`${API_BASE}/tasks/clear-cache`);
       fetchCacheStats();
       alert('🧹 In-Memory node-cache successfully cleared!');
     } catch (err) {
@@ -126,11 +127,10 @@ function PerformanceMetrics() {
 
   return (
     <div className="performance-container">
-      {/* ─── WEEK 9: SERVER-SIDE CACHING & QUERY OPTIMIZATION ─── */}
-      <section className="performance-card card week9-card">
+      {/* ─── SERVER-SIDE CACHING & QUERY OPTIMIZATION ─── */}
+      <section className="performance-card card caching-card">
         <div className="performance-header">
           <div>
-            <span className="week-tag">Week 9 Practical</span>
             <h2 className="section-title">🚀 In-Memory Caching & Query Optimization (node-cache)</h2>
           </div>
           <div className="button-group">
@@ -271,7 +271,6 @@ function PerformanceMetrics() {
       <section className="performance-card card">
         <div className="performance-header">
           <div>
-            <span className="week-tag">Frontend Optimization</span>
             <h2 className="section-title">⚡ Lazy Loading & Code Splitting (React.lazy + Suspense)</h2>
           </div>
           <button

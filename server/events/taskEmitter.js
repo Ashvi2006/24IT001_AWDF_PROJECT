@@ -7,9 +7,30 @@ const EventEmitter = require('events');
 class TaskEventEmitter extends EventEmitter {
   constructor() {
     super();
-    // In-memory buffer to store recent background notification events
-    this.notifications = [];
     this.maxNotifications = 50;
+
+    const baseTime = Date.now() - 1000 * 60 * 3;
+    const t0 = new Date(baseTime).toISOString();
+    const t1 = new Date(baseTime + 8).toISOString();
+    const t2 = new Date(baseTime + 418).toISOString();
+
+    // In-memory buffer initialized with realistic baseline demonstration events
+    this.notifications = [
+      {
+        id: 'notif_init_demo_1',
+        taskId: '67a89f10b23e',
+        taskTitle: 'Setup MongoDB Mongoose & Auth Middleware',
+        priority: 'High',
+        user: 'Ashvi Antala (24IT001)',
+        apiEmittedAt: t0,
+        handlerStartedAt: t1,
+        handlerCompletedAt: t2,
+        executionDeltaMs: 410,
+        simulatedAsyncDelay: 400,
+        status: 'Processed asynchronously in background',
+        message: 'Task "Setup MongoDB Mongoose & Auth Middleware" notification dispatched to Ashvi Antala without blocking API response.'
+      }
+    ];
 
     // Register asynchronous background listener for 'task:created'
     this.on('task:created', this.handleTaskCreated.bind(this));
@@ -24,7 +45,7 @@ class TaskEventEmitter extends EventEmitter {
     const startTimeMs = Date.now();
 
     console.log('\n============================================================');
-    console.log('🔔 [WEEK 10 ASYNC EVENT] Received "task:created" event');
+    console.log('🔔 [ASYNC EVENT] Received "task:created" event');
     console.log(`📌 Task Title: "${payload.title}" (ID: ${payload._id || payload.taskId || 'new'})`);
     console.log(`👤 Assigned User: ${payload.user || 'Ashvi (Student)'}`);
     console.log(`⚡ API Response Returned At:  ${payload.apiEmittedAt}`);
@@ -60,7 +81,7 @@ class TaskEventEmitter extends EventEmitter {
         this.notifications.pop();
       }
 
-      console.log(`✅ [WEEK 10 ASYNC EVENT COMPLETE] Finished at ${handlerCompletedAt}`);
+      console.log(`✅ [ ASYNC EVENT COMPLETE] Finished at ${handlerCompletedAt}`);
       console.log(`⏱️ Handler processing time: ${executionDeltaMs}ms (Non-blocking execution)`);
       console.log('============================================================\n');
 

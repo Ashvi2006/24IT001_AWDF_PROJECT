@@ -1,7 +1,13 @@
 version: '3.8'
 
+# ==============================================================================
 # Week 11: Containerization with Docker and Docker Compose
-# Orchestrates Full-Stack Task Management Application (Frontend, Backend, and MongoDB)
+# Orchestrates:
+#   1. awf-mongodb  - MongoDB Database Service with Persistent Volume
+#   2. awf-backend  - Node.js Express REST API + EventEmitter + node-cache
+#   3. awf-frontend - React Vite SPA built & served via Nginx Reverse Proxy
+# Single command to run entire stack: docker-compose up --build
+# ==============================================================================
 
 services:
   # ─── Service 1: MongoDB Database Container ───
@@ -37,9 +43,6 @@ services:
       - NODE_ENV=production
       - MONGODB_URI=mongodb://mongodb:27017/student_portfolio
       - JWT_SECRET=ashvi_antala_24IT001_jwt_secret_key_2026
-      # Optional AI keys (fallback heuristic engine active if not provided)
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     depends_on:
       mongodb:
         condition: service_healthy

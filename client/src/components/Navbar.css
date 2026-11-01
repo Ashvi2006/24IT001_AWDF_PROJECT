@@ -163,6 +163,27 @@
   gap: 0.35rem;
 }
 
+.logged-in-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-logout-nav {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+  color: #fca5a5 !important;
+  box-shadow: none !important;
+  padding: 0.4rem 0.8rem !important;
+  font-size: 0.8rem !important;
+  text-decoration: none;
+}
+
+.btn-logout-nav:hover {
+  background: rgba(239, 68, 68, 0.3) !important;
+  color: #ffffff !important;
+}
+
 /* ─── Light Mode Overrides ─── */
 body.light-mode {
   background: #f8fafc;

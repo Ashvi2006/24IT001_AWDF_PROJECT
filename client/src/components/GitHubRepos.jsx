@@ -58,7 +58,7 @@ function GitHubRepos() {
       <div className="github-header">
         <div>
           <h2 className="section-title">🌐 GitHub Repositories (REST API Integration)</h2>
-          <p className="github-subtitle">Practical 3: Async useEffect fetching, loading spinner & error handling</p>
+          <p className="github-subtitle">Async useEffect fetching, loading spinner & error handling</p>
         </div>
         <div className="github-controls">
           <span className="github-user-label">GitHub User:</span>

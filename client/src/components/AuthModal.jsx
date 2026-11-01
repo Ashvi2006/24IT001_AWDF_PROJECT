@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
+import API_BASE from '../services/api';
 import './AuthModal.css';
 
 function AuthModal({ isOpen, onClose, onLoginSuccess, user, onLogout }) {
@@ -23,8 +24,8 @@ function AuthModal({ isOpen, onClose, onLoginSuccess, user, onLogout }) {
     setLoading(true);
 
     const url = isLogin 
-      ? 'http://localhost:5000/api/auth/login' 
-      : 'http://localhost:5000/api/auth/register';
+      ? `${API_BASE}/auth/login` 
+      : `${API_BASE}/auth/register`;
 
     try {
       const payload = isLogin 
